@@ -1,0 +1,28 @@
+# 数据文件目录
+data/
+
+# 模型检查点
+checkpoints/
+
+# 日志文件
+*.log
+training_log.txt
+
+# Python 缓存
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# 环境文件
+.env
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 系统文件
+.DS_Store
+Thumbs.db
