@@ -414,7 +414,7 @@ def train(
     print(f"  F1 (weighted): {metrics['f1_weighted']:.4f}")
     print(f"  F1 per class: {metrics['f1_per_class']}")
 
-    # 保存训练历史
+    # 保存训练历史（包含测试集预测结果）
     history = {
         'train_losses': train_losses,
         'val_losses': val_losses,
@@ -422,7 +422,9 @@ def train(
         'val_accs': val_accs,
         'best_val_loss': best_val_loss,
         'best_val_acc': best_val_acc,
-        'test_metrics': metrics
+        'test_metrics': metrics,
+        'test_predictions': predictions,  # 添加预测结果
+        'test_labels': labels  # 添加真实标签
     }
     torch.save(history, os.path.join(output_dir, 'training_history.pth'))
 
