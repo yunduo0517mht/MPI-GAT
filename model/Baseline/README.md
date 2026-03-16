@@ -2,7 +2,7 @@
 
 本目录包含消融实验的基线模型实现。
 
-## 📁 文件结构
+## 文件结构
 
 ```
 model/Baseline/
@@ -11,7 +11,7 @@ model/Baseline/
 └── README.md             # 本文件
 ```
 
-## 🎯 模型说明
+## 模型说明
 
 ### Stage 1: Baseline_MLP
 
@@ -30,112 +30,107 @@ Input (1024) → Linear(1024, 512) → ReLU → Dropout(0.5)
 
 **参数量**: ~657K
 
-### Stage 2: Comment_MLP (TODO)
+### Stage 2: Feature_MLP
 
-**用途**: 使用新闻文本 + 评论聚合特征
+**用途**: 新闻 + 额外特征 (消融实验)
 
-**输入**:
-- 新闻 BERT embedding (1024维)
-- 评论聚合特征 (1024维)
+**支持的配置**:
 
-**输出**: 6类分类预测
+| 配置 | 额外特征 | 输入维度 | 说明 |
+|------|----------|----------|------|
+| news_author | 作者 embedding | 2048 | 证明作者特征有帮助 |
+| news_comment | 评论平均 (平均池化) | 2048 | 证明评论特征有帮助 |
+| news_author_comment | 作者 + 评论 | 3072 | 证明两者互补 |
 
-**状态**: 等待评论网络数据准备完成
-
-## 🚀 使用方法
-
-### 1. 准备数据
-
-确保你已经生成了 `data/liar_clean_embeddings.pt` 文件，格式如下：
-
-```python
-{
-    "news_id_1": {
-        "embedding": torch.Tensor([1024]),  # BERT embedding
-        "label": 0  # 0-5, 六类标签
-    },
-    "news_id_2": {
-        "embedding": torch.Tensor([1024]),
-        "label": 2
-    },
-    ...
-}
+**架构**:
+```
+Input (2048/3072) → Linear(→512) → ReLU → Dropout(0.5)
+                  → Linear(512, 256) → ReLU → Dropout(0.5)
+                  → Linear(256, 6) → Output
 ```
 
-### 2. 训练 Baseline_MLP
+## 使用方法
+
+### 1. 训练 Stage 1 (只用新闻)
 
 ```bash
 python train_baseline_mlp.py
 ```
 
-**配置参数** (在 `train_baseline_mlp.py` 中修改):
-- `data_path`: 数据文件路径 (默认: `data/liar_clean_embeddings.pt`)
-- `output_dir`: 输出目录 (默认: `./checkpoints/baseline_mlp`)
-- `embedding_dim`: embedding维度 (默认: 1024)
-- `hidden_dims`: 隐藏层维度 (默认: [512, 256])
-- `batch_size`: 批次大小 (默认: 32)
-- `num_epochs`: 训练轮数 (默认: 50)
-- `learning_rate`: 学习率 (默认: 1e-4)
+### 2. 训练 Stage 2 (额外特征消融)
 
-### 3. 输出结果
+```bash
+# 新闻 + 作者
+python train_mlp_features.py --features author
 
-训练完成后，会在 `checkpoints/baseline_mlp/` 目录下生成：
+# 新闻 + 评论
+python train_mlp_features.py --features comment
 
-- `best_model.pth`: 最佳模型checkpoint
-- `training_history.pth`: 训练历史记录
+# 新闻 + 作者 + 评论
+python train_mlp_features.py --features author,comment
 
-## 📊 预期结果
+# 多次运行取平均
+python train_mlp_features.py --features author --runs 5
+```
 
-根据论文消融实验设计，预期结果：
+### 3. 输出目录
+
+```
+checkpoints/
+├── baseline_mlp/           # Stage 1
+│   └── <timestamp>/
+│
+└── mlp_ablation/           # Stage 2
+    ├── news_author/
+    │   └── <timestamp>/
+    ├── news_comment/
+    │   └── <timestamp>/
+    └── news_author_comment/
+        └── <timestamp>/
+```
+
+### 4. 数据格式
+
+Stage 2 数据格式 (每条新闻一个JSON文件):
+```json
+{
+    "news_id": "news_1",
+    "news_label": "false",
+    "news_embedding": [1024 floats],
+    "author_embedding": [1024 floats],
+    "comments": [
+        {"embedding": [1024 floats], ...},
+        ...
+    ]
+}
+```
+
+## 预期结果
 
 | Stage | Model | Input | Expected Acc |
 |-------|-------|-------|--------------|
-| 1 | Baseline_MLP | News text only | 25-30% |
-| 2 | Comment_MLP | News + Comments | 32-36% |
-| 3 | MPI-GAT (w/o metapath) | Heterograph | 38-42% |
+| 1 | Baseline_MLP | News only | 25-30% |
+| 2a | Feature_MLP (author) | News + Author | ~32% |
+| 2b | Feature_MLP (comment) | News + Comment | ~32% |
+| 2c | Feature_MLP (both) | News + Author + Comment | ~35% |
+| 3 | MPI-GAT | Heterograph | 38-42% |
 | 4 | MPI-GAT (Full) | Heterograph + Metapaths | 43-47% |
 
-## 🔍 代码测试
+## 论文写作
 
-测试模型是否正常工作：
+**Table: Ablation Study on Feature Contributions**
 
-```bash
-cd model/Baseline
-python mlp_models.py
-```
+| # | Features | Acc | F1 | Δ |
+|---|----------|-----|----|----|
+| 1 | News only | XX.X | XX.X | - |
+| 2 | + Author | XX.X | XX.X | +X.X |
+| 3 | + Comment | XX.X | XX.X | +X.X |
+| 4 | + Author + Comment | XX.X | XX.X | +X.X |
 
-应该看到：
-
-```
-============================================================
-Testing Baseline Models
-============================================================
-
-1. Testing Baseline_MLP
-------------------------------------------------------------
-Model created!
-  Total parameters: 657,926
-...
-[PASS] All models tested successfully!
-============================================================
-```
-
-## 📝 论文写作
-
-**Table X: Ablation Study**
-
-| # | Model Configuration | Acc | F1 | Δ |
-|---|---------------------|-----|----|----|
-| 1 | Text-only (Baseline_MLP) | XX.X | XX.X | - |
-| 2 | + Comment features | XX.X | XX.X | +X.X |
-| 3 | + GNN structure | XX.X | XX.X | +X.X |
-| 4 | + Metapath features | XX.X | XX.X | +X.X |
-
-## 🛠️ TODO
+## TODO
 
 - [x] 实现 Baseline_MLP
+- [x] 实现 Feature_MLP
 - [x] 实现训练脚本
-- [ ] 准备评论聚合特征数据
-- [ ] 实现 Comment_MLP 训练脚本
-- [ ] 运行所有baseline实验
+- [ ] 运行 Stage 2 消融实验
 - [ ] 整理实验结果到论文表格
